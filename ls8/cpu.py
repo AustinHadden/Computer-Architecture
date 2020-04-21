@@ -17,26 +17,28 @@ class CPU:
     def ram_write(self, mdr, mar):
         self.ram[mar] = mdr
 
-    def load(self):
+    def load(self, filename):
         """Load a program into memory."""
 
         address = 0
 
         # For now, we've just hardcoded a program:
 
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
+        program = []
 
-        for instruction in program:
-            self.ram_write(instruction, address)
-            address += 1
+        with open(filename) as f:
+            program = f.readlines()
+        for line in program:
+            if '#' in line:
+                instruction = line.split('#')[0]
+            else:
+                instruction = line.split('\n')[0]
+            if len(instruction) == 0:
+                continue
+            else:
+                instruction = int(instruction, 2)
+                self.ram_write(instruction, address)
+                address += 1
 
 
     def alu(self, op, reg_a, reg_b):
@@ -44,6 +46,8 @@ class CPU:
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
+        elif: op == 'MUL':
+            self.reg[reg_a] *= self.reg[reg_b]
         #elif op == "SUB": etc
         else:
             raise Exception("Unsupported ALU operation")
@@ -116,12 +120,16 @@ class CPU:
             operand_a = self.ram_read(self.pc+1)
             operand_b = self.ram_read(self.pc+2)
 
+            is_alu = ir >> 5 & 1
+
             if inst == 'HLT':
                 running = False
+            elif is_alu:
+                self.alu(inst, operand_a, operand_b)
             elif inst == 'LDI':
                 self.reg[operand_a] = operand_b
             elif inst == 'PRN':
                 print(self.reg[operand_a])
 
-            num_ops = ir >> 6
-            self.pc += num_ops+1
+            inst_len = ir >> 6 & 0b11
+            self.pc += inst_len+1
