@@ -8,7 +8,14 @@ class CPU:
     def __init__(self):
         self.ram = [0] * 256
         self.reg = [0] * 8
+        self.reg[7] = 0xf4
         self.pc = 0
+        self.instruction_branchtable = {
+            'LDI': self.ldi,
+            'PRN': self.prn,
+            'POP': self.pop,
+            'PUSH': self.push
+        }
 
     def ram_read(self, mar):
         mdr = self.ram[mar]
@@ -46,7 +53,7 @@ class CPU:
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        elif: op == 'MUL':
+        elif op == 'MUL':
             self.reg[reg_a] *= self.reg[reg_b]
         #elif op == "SUB": etc
         else:
@@ -112,13 +119,32 @@ class CPU:
 
         return dictionary[bite]
 
+    def ldi(self, reg_location, value):
+        self.reg[reg_location] = value
+
+    def prn(self, reg_location):
+        print(self.reg[reg_location])
+
+    def pop(self, reg_location):
+        sp = self.reg[7]
+        self.reg[reg_location] = self.ram[sp]
+        self.reg[7] += 1
+
+    def push(self, reg_location):
+        self.reg[7] -= 1
+        sp = self.reg[7]
+        self.ram[sp] = self.reg[reg_location]
+
     def run(self):
         running = True
         while running:
             ir = self.ram_read(self.pc)
             inst = self.decode(ir)
-            operand_a = self.ram_read(self.pc+1)
-            operand_b = self.ram_read(self.pc+2)
+            inst_len = ir >> 6 & 0b11
+            if inst_len > 0:
+                operand_a = self.ram_read(self.pc+1)
+            if inst_len == 2:
+                operand_b = self.ram_read(self.pc+2)
 
             is_alu = ir >> 5 & 1
 
@@ -126,10 +152,13 @@ class CPU:
                 running = False
             elif is_alu:
                 self.alu(inst, operand_a, operand_b)
-            elif inst == 'LDI':
-                self.reg[operand_a] = operand_b
-            elif inst == 'PRN':
-                print(self.reg[operand_a])
+            else:
+                func = self.instruction_branchtable[inst]
+                if inst_len == 0:
+                    func()
+                elif inst_len == 1:
+                    func(operand_a)
+                else:
+                    func(operand_a, operand_b)
 
-            inst_len = ir >> 6 & 0b11
             self.pc += inst_len+1
