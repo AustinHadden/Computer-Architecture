@@ -14,7 +14,9 @@ class CPU:
             'LDI': self.ldi,
             'PRN': self.prn,
             'POP': self.pop,
-            'PUSH': self.push
+            'PUSH': self.push,
+            'CALL': self.call,
+            'RET': self.ret
         }
 
     def ram_read(self, mar):
@@ -55,6 +57,14 @@ class CPU:
             self.reg[reg_a] += self.reg[reg_b]
         elif op == 'MUL':
             self.reg[reg_a] *= self.reg[reg_b]
+        elif op == 'AND':
+            self.reg[reg_a] = bin(self.reg[reg_a]) & bin(self.reg[reg_b])
+        elif op == 'DEC':
+            self.reg[reg_a] -= 1
+        elif op == 'DIV':
+            self.reg[reg_a] = self.reg[reg_a] / self.reg[reg_b]
+        elif op == 'INC':
+            self.reg[reg_a] += 1
         #elif op == "SUB": etc
         else:
             raise Exception("Unsupported ALU operation")
@@ -135,23 +145,39 @@ class CPU:
         sp = self.reg[7]
         self.ram[sp] = self.reg[reg_location]
 
+    def call(self, reg_location):
+        self.ram_write(self.reg[4], 0xf5)
+        self.ldi(4, self.pc+2)
+        self.push(4)
+        self.ldi(4, self.ram_read(0xf5))
+        self.pc = self.reg[reg_location]
+
+    def ret(self):
+        self.ram_write(self.reg[4], 0xf6)
+        self.pop(4)
+        self.pc = self.reg[4]
+        self.reg[4] = self.ram_read(0xf6)
+
     def run(self):
         running = True
         while running:
             ir = self.ram_read(self.pc)
             inst = self.decode(ir)
             inst_len = ir >> 6 & 0b11
-            if inst_len > 0:
-                operand_a = self.ram_read(self.pc+1)
-            if inst_len == 2:
-                operand_b = self.ram_read(self.pc+2)
+            operand_a = self.ram_read(self.pc+1)
+            operand_b = self.ram_read(self.pc+2)
 
             is_alu = ir >> 5 & 1
 
+            inst_set_pc = ir >> 4 & 1
+            next_inst_location = self.pc + inst_len+1
+
             if inst == 'HLT':
                 running = False
+                self.pc = next_inst_location
             elif is_alu:
                 self.alu(inst, operand_a, operand_b)
+                self.pc = next_inst_location
             else:
                 func = self.instruction_branchtable[inst]
                 if inst_len == 0:
@@ -161,4 +187,5 @@ class CPU:
                 else:
                     func(operand_a, operand_b)
 
-            self.pc += inst_len+1
+            if not inst_set_pc:
+                self.pc = next_inst_location
